@@ -1,0 +1,137 @@
+version: '3.9'
+services:
+
+  prometheus:
+    image: 'prom/prometheus:latest'
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - javaexpress-network
+      
+  grafana:
+    image: 'grafana/grafana:latest'
+    restart : on-failure
+    ports:
+      - '3000:3000'
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    networks:
+      - javaexpress-network
+    depends_on:
+      - prometheus
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - javaexpress-network
+
+  eurekaserver:
+    image: 'pradyot09/eurekaserver:0.0.1'
+    restart : on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+    ports:
+      - "9002:9002"
+    networks:
+      - javaexpress-network
+    environment:
+      SPRING_APPLICATION_NAME: "eurekaserver"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:9002/eureka/
+
+  accounts:
+    image: 'pradyot09/accounts:0.0.1'
+    restart : on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+    volumes:
+      - ../logs/:/Users/Shared/logs/
+    ports:
+      - "9003:9003"
+    networks:
+      - javaexpress-network
+    depends_on:
+      - eurekaserver
+      - zipkin
+    environment:
+      SPRING_APPLICATION_NAME: "accounts"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:9002/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  cards:
+    image: 'pradyot09/cards:0.0.1'
+    restart : on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+    volumes:
+      - ../logs:/Users/Shared/logs/
+    ports:
+      - "9004:9004"
+    networks:
+      - javaexpress-network
+    depends_on:
+      - eurekaserver
+      - zipkin
+    environment:
+      SPRING_APPLICATION_NAME: "cards"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:9002/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  loans:
+    image: 'pradyot09/loans:0.0.1'
+    restart : on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+    volumes:
+      - ../logs:/Users/Shared/logs/
+    ports:
+      - "9005:9005"
+    networks:
+      - javaexpress-network
+    depends_on:
+      - eurekaserver
+      - zipkin
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:9002/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+  gateway-server:
+    image: "pradyot09/gateway-server:0.0.1"
+    restart : on-failure
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+    volumes:
+      - ../logs:/Users/Shared/logs/
+    ports:
+      - "9001:9001"
+    networks:
+      - javaexpress-network
+    depends_on:
+      - eurekaserver
+      - cards
+      - loans
+      - accounts
+      - zipkin
+    environment:
+      SPRING_APPLICATION_NAME: "gateway-server"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:9002/eureka/
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+networks:
+  javaexpress-network: 
